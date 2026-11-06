@@ -40,12 +40,8 @@ jobs:
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
           
-          echo "=== Full file tree of extracted project ==="
-          find project -maxdepth 3
-          
-          # Find the root directory containing settings.gradle or build.gradle
+          # Find the folder containing settings.gradle or build.gradle
           PROJECT_DIR=$(find project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -printf '%h\n' | head -n 1)
-          
           if [ -z "$PROJECT_DIR" ]; then
             PROJECT_DIR=$(find project -type f -name "build.gradle" -printf '%h\n' | head -n 1)
           fi
@@ -55,8 +51,22 @@ jobs:
             exit 1
           fi
           
-          echo "Found Android project root at: $PROJECT_DIR"
+          echo "Found Android project at: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Auto-Fix Missing Source Directories
+        run: |
+          cd "$PROJECT_DIR"
+          # Ensure standard source directories exist so Gradle never fails on missing paths
+          if [ -d "app" ]; then
+            mkdir -p app/src/main/kotlin
+            mkdir -p app/src/main/java
+            mkdir -p app/src/main/debug
+            mkdir -p app/src/debug/kotlin
+            mkdir -p app/src/debug/java
+          fi
+          mkdir -p src/main/kotlin
+          mkdir -p src/main/java
 
       - name: Build APK
         run: |
@@ -64,16 +74,15 @@ jobs:
           
           # Ensure Gradle wrapper exists and uses version 8.9
           if [ ! -f "gradlew" ]; then
-            echo "gradlew not found, generating Gradle 8.9 wrapper..."
+            echo "Generating Gradle 8.9 wrapper..."
             gradle wrapper --gradle-version 8.9
           fi
           
           chmod +x gradlew
           
-          # Build using the wrapper with info logs
+          # Build APK
           ./gradlew assembleDebug --info
           
-          # Locate the built APK anywhere in the project output directories
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
             echo "::error::APK not generated"
