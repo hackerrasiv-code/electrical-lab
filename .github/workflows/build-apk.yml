@@ -40,13 +40,18 @@ jobs:
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
           
-          # Find the folder containing gradlew or build.gradle
-          PROJECT_DIR=$(find project -type f -name "build.gradle" -o -name "build.gradle.kts" -printf '%h\n' | head -n 1)
+          echo "=== Contents of unzipped directory ==="
+          find project -maxdepth 3
+          
+          # Broad search: find any directory containing build.gradle, settings.gradle, or AndroidManifest.xml
+          PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" -o -name "AndroidManifest.xml" \) -printf '%h\n' | head -n 1)
+          
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::Android project files not found inside the ZIP."
+            echo "::error::Could not find Android project structure inside the ZIP."
             exit 1
           fi
           
+          echo "Found Android project at: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Build APK
@@ -54,20 +59,19 @@ jobs:
           cd "$PROJECT_DIR"
           
           if [ ! -f "gradlew" ]; then
-            echo "::error::gradlew wrapper script is missing from your ZIP file!"
-            exit 1
+            echo "gradlew not found in project root, searching subdirectories..."
+            # Look for gradlew nearby if it's nested
+            GRADLEW_PATH=$(find . -maxdepth 2 -name "gradlew" -type f | head -n 1)
+            if [ -n "$GRADLEW_PATH" ]; then
+              cd "$(dirname "$GRADLEW_PATH")"
+            else
+              echo "Generating fresh gradle wrapper..."
+              gradle wrapper
+            fi
           fi
           
           chmod +x gradlew
-          
-          # Run build and capture/print the exact failure if it happens
-          ./gradlew assembleDebug --stacktrace --console plain || {
-            echo "=========================================="
-            echo "BUILD FAILED: Printing recent build logs:"
-            echo "=========================================="
-            find . -path "*/build/reports/*" -type f
-            exit 1
-          }
+          ./gradlew assembleDebug --console plain
           
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
