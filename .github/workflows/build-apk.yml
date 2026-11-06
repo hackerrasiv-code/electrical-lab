@@ -40,30 +40,40 @@ jobs:
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
           
-          # Find the folder containing build.gradle or settings.gradle
-          PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" \) -printf '%h\n' | head -n 1)
+          echo "=== Full file tree of extracted project ==="
+          find project -maxdepth 3
+          
+          # Find the root directory containing settings.gradle or build.gradle
+          PROJECT_DIR=$(find project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -printf '%h\n' | head -n 1)
+          
+          if [ -z "$PROJECT_DIR" ]; then
+            PROJECT_DIR=$(find project -type f -name "build.gradle" -printf '%h\n' | head -n 1)
+          fi
           
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::Could not find Android project structure inside the ZIP."
             exit 1
           fi
           
-          echo "Found Android project at: $PROJECT_DIR"
+          echo "Found Android project root at: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
           
-          # Configure or update the wrapper to Gradle 8.9 as required by the project
-          echo "Setting up Gradle 8.9 wrapper..."
-          gradle wrapper --gradle-version 8.9
+          # Ensure Gradle wrapper exists and uses version 8.9
+          if [ ! -f "gradlew" ]; then
+            echo "gradlew not found, generating Gradle 8.9 wrapper..."
+            gradle wrapper --gradle-version 8.9
+          fi
           
           chmod +x gradlew
           
-          # Build using the Gradle wrapper
+          # Build using the wrapper with info logs
           ./gradlew assembleDebug --info
           
+          # Locate the built APK anywhere in the project output directories
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
             echo "::error::APK not generated"
