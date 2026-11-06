@@ -40,7 +40,6 @@ jobs:
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
           
-          # Find the folder containing build.gradle or settings.gradle
           PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -printf '%h\n' | head -n 1)
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::Android project files (build.gradle) not found inside the ZIP."
@@ -60,8 +59,8 @@ jobs:
           
           chmod +x gradlew
           
-          # Run with stacktrace enabled to show the exact compilation error
-          ./gradlew assembleDebug --stacktrace
+          # Run with --info to display the full root cause of the failure
+          ./gradlew assembleDebug --info
           
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
