@@ -40,9 +40,10 @@ jobs:
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
           
-          PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -printf '%h\n' | head -n 1)
+          # Find the folder containing gradlew or build.gradle
+          PROJECT_DIR=$(find project -type f -name "build.gradle" -o -name "build.gradle.kts" -printf '%h\n' | head -n 1)
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::Android project files (build.gradle) not found inside the ZIP."
+            echo "::error::Android project files not found inside the ZIP."
             exit 1
           fi
           
@@ -53,14 +54,20 @@ jobs:
           cd "$PROJECT_DIR"
           
           if [ ! -f "gradlew" ]; then
-            echo "gradlew not found, generating wrapper..."
-            gradle wrapper
+            echo "::error::gradlew wrapper script is missing from your ZIP file!"
+            exit 1
           fi
           
           chmod +x gradlew
           
-          # Use plain console output to prevent log flooding and show clear errors
-          ./gradlew assembleDebug --console plain
+          # Run build and capture/print the exact failure if it happens
+          ./gradlew assembleDebug --stacktrace --console plain || {
+            echo "=========================================="
+            echo "BUILD FAILED: Printing recent build logs:"
+            echo "=========================================="
+            find . -path "*/build/reports/*" -type f
+            exit 1
+          }
           
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
