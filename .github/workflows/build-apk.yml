@@ -30,7 +30,7 @@ jobs:
           echo "=== Files in workspace ==="
           ls -la
           
-          # Find the zip file automatically if exact name varies
+          # Find the zip file automatically
           ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
           if [ -z "$ZIP_FILE" ]; then
             echo "::error::No .zip file found in the repository root!"
@@ -49,7 +49,7 @@ jobs:
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::Android project files (build.gradle) not found inside the ZIP."
             exit 1
-          end
+          fi
           
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
@@ -57,7 +57,7 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           
-          # If gradlew doesn't exist in the project folder, generate it automatically!
+          # If gradlew doesn't exist, generate wrapper
           if [ ! -f "gradlew" ]; then
             echo "gradlew not found, generating wrapper..."
             gradle wrapper
@@ -71,7 +71,7 @@ jobs:
           if [ -z "$APK_PATH" ]; then
             echo "::error::APK not generated"
             exit 1
-          end
+          fi
           
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
