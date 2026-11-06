@@ -27,21 +27,42 @@ jobs:
 
       - name: Extract Project
         run: |
-          unzip -q ElectricalLab-Android-Project.zip -d project
+          echo "=== Files in workspace ==="
+          ls -la
           
-          # Find the actual directory containing the gradlew script
-          PROJECT_DIR=$(find project -type f -name gradlew -printf '%h\n' | head -n 1)
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::gradlew not found inside the extracted ZIP"
+          # Find the zip file automatically if exact name varies
+          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "::error::No .zip file found in the repository root!"
             exit 1
           fi
+          
+          echo "Found zip file: $ZIP_FILE"
+          mkdir -p project
+          unzip -q "$ZIP_FILE" -d project
+          
+          echo "=== Contents of extracted folder ==="
+          ls -la project
+
+          # Find the folder containing build.gradle or settings.gradle
+          PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -printf '%h\n' | head -n 1)
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "::error::Android project files (build.gradle) not found inside the ZIP."
+            exit 1
+          end
+          
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
           
-          # Make gradlew executable and build the debug APK
+          # If gradlew doesn't exist in the project folder, generate it automatically!
+          if [ ! -f "gradlew" ]; then
+            echo "gradlew not found, generating wrapper..."
+            gradle wrapper
+          fi
+          
           chmod +x gradlew
           ./gradlew assembleDebug
           
@@ -50,7 +71,7 @@ jobs:
           if [ -z "$APK_PATH" ]; then
             echo "::error::APK not generated"
             exit 1
-          fi
+          end
           
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
@@ -59,4 +80,3 @@ jobs:
         with:
           name: ElectricalLab-APK
           path: ${{ env.APK_PATH }}
-          
