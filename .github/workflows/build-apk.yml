@@ -1,3 +1,4 @@
+
 name: Build Electrical Lab APK
 
 on:
@@ -7,71 +8,106 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
     steps:
+      # 1. Download repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # 2. Configure Java
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
+      # 3. Configure Android SDK
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-      - name: Set up Gradle Cache
+      # 4. Install a fixed Gradle version
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
+      # 5. Extract Android project
       - name: Extract Project
+        shell: bash
         run: |
-          echo "=== Files in workspace ==="
-          ls -la
-          
-          ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
+          echo "Checking repository files..."
+          ls -lah
+
+          ZIP_FILE=$(find . -maxdepth 1 -type f -name "*.zip" | head -n 1)
+
           if [ -z "$ZIP_FILE" ]; then
-            echo "::error::No .zip file found in the repository root!"
+            echo "::error::No project ZIP found"
             exit 1
           fi
-          
-          echo "Found zip file: $ZIP_FILE"
+
+          echo "Extracting: $ZIP_FILE"
+
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
-          
-          PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -printf '%h\n' | head -n 1)
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::Android project files (build.gradle) not found inside the ZIP."
+
+          echo "Searching for Gradle project root..."
+
+          SETTINGS=$(find project -type f \
+            \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -print -quit)
+
+          if [ -z "$SETTINGS" ]; then
+            echo "::error::settings.gradle or settings.gradle.kts not found"
+            find project -maxdepth 4 -type f | head -100
             exit 1
           fi
-          
+
+          PROJECT_DIR=$(dirname "$SETTINGS")
+
+          echo "Project root: $PROJECT_DIR"
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+      # 6. Build debug APK
       - name: Build APK
+        shell: bash
         run: |
           cd "$PROJECT_DIR"
-          
-          if [ ! -f "gradlew" ]; then
-            echo "gradlew not found, generating wrapper..."
-            gradle wrapper
+
+          echo "Gradle version:"
+          gradle --version
+
+          if [ -f gradle/wrapper/gradle-wrapper.properties ] && [ -f gradlew ]; then
+            chmod +x gradlew
+            ./gradlew assembleDebug --stacktrace
+          else
+            echo "Using installed Gradle 8.9"
+            gradle assembleDebug --stacktrace
           fi
-          
-          chmod +x gradlew
-          
-          # Run with --info to display the full root cause of the failure
-          ./gradlew assembleDebug --info
-          
-          APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
+
+          echo "Searching for APK..."
+
+          APK_PATH=$(find "$PWD" -type f \
+            -path '*/build/outputs/apk/debug/*.apk' \
+            -print -quit)
+
           if [ -z "$APK_PATH" ]; then
-            echo "::error::APK not generated"
+            echo "::error::APK was not generated"
             exit 1
           fi
-          
+
           echo "APK_PATH=$APK_PATH" >> "$GITHUB_ENV"
 
+          echo "APK successfully generated!"
+
+      # 7. Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ElectricalLab-APK
           path: ${{ env.APK_PATH }}
+          if-no-files-found: error
