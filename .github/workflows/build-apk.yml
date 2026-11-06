@@ -30,7 +30,6 @@ jobs:
           echo "=== Files in workspace ==="
           ls -la
           
-          # Find the zip file automatically
           ZIP_FILE=$(find . -maxdepth 1 -name "*.zip" | head -n 1)
           if [ -z "$ZIP_FILE" ]; then
             echo "::error::No .zip file found in the repository root!"
@@ -41,9 +40,6 @@ jobs:
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
           
-          echo "=== Contents of extracted folder ==="
-          ls -la project
-
           # Find the folder containing build.gradle or settings.gradle
           PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -printf '%h\n' | head -n 1)
           if [ -z "$PROJECT_DIR" ]; then
@@ -57,16 +53,16 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           
-          # If gradlew doesn't exist, generate wrapper
           if [ ! -f "gradlew" ]; then
             echo "gradlew not found, generating wrapper..."
             gradle wrapper
           fi
           
           chmod +x gradlew
-          ./gradlew assembleDebug
           
-          # Locate the built APK using absolute path
+          # Run with stacktrace enabled to show the exact compilation error
+          ./gradlew assembleDebug --stacktrace
+          
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
             echo "::error::APK not generated"
