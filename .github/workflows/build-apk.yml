@@ -40,11 +40,8 @@ jobs:
           mkdir -p project
           unzip -q "$ZIP_FILE" -d project
           
-          echo "=== Contents of unzipped directory ==="
-          find project -maxdepth 3
-          
-          # Broad search: find any directory containing build.gradle, settings.gradle, or AndroidManifest.xml
-          PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" -o -name "AndroidManifest.xml" \) -printf '%h\n' | head -n 1)
+          # Find the folder containing build.gradle or settings.gradle
+          PROJECT_DIR=$(find project -type f \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "settings.gradle" \) -printf '%h\n' | head -n 1)
           
           if [ -z "$PROJECT_DIR" ]; then
             echo "::error::Could not find Android project structure inside the ZIP."
@@ -58,20 +55,16 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           
+          # If gradlew is missing, generate a stable Gradle 8.7 wrapper instead of Gradle 9
           if [ ! -f "gradlew" ]; then
-            echo "gradlew not found in project root, searching subdirectories..."
-            # Look for gradlew nearby if it's nested
-            GRADLEW_PATH=$(find . -maxdepth 2 -name "gradlew" -type f | head -n 1)
-            if [ -n "$GRADLEW_PATH" ]; then
-              cd "$(dirname "$GRADLEW_PATH")"
-            else
-              echo "Generating fresh gradle wrapper..."
-              gradle wrapper
-            fi
+            echo "gradlew not found, generating stable Gradle 8.7 wrapper..."
+            gradle wrapper --gradle-version 8.7
           fi
           
           chmod +x gradlew
-          ./gradlew assembleDebug --console plain
+          
+          # Build using the stable wrapper with info logging to see clean output
+          ./gradlew assembleDebug --info
           
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
