@@ -21,7 +21,6 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
-          
 
       - name: Set up Gradle Cache
         uses: gradle/actions/setup-gradle@v4
@@ -30,10 +29,10 @@ jobs:
         run: |
           unzip -q ElectricalLab-Android-Project.zip -d project
           
-          # Find the directory containing settings.gradle or settings.gradle.kts
-          PROJECT_DIR=$(find project -type f \( -name settings.gradle -o -name settings.gradle.kts \) -printf '%h\n' | head -n 1)
+          # Find the actual directory containing the gradlew script
+          PROJECT_DIR=$(find project -type f -name gradlew -printf '%h\n' | head -n 1)
           if [ -z "$PROJECT_DIR" ]; then
-            echo "::error::Gradle project not found in ZIP"
+            echo "::error::gradlew not found inside the extracted ZIP"
             exit 1
           fi
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -42,14 +41,9 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
           
-          # Fix permission loss from unzip and use the Gradle wrapper
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug
-          else
-            echo "::error::gradlew wrapper not found in $PROJECT_DIR"
-            exit 1
-          fi
+          # Make gradlew executable and build the debug APK
+          chmod +x gradlew
+          ./gradlew assembleDebug
           
           # Locate the built APK using absolute path
           APK_PATH=$(find "$(pwd)" -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)
@@ -65,3 +59,4 @@ jobs:
         with:
           name: ElectricalLab-APK
           path: ${{ env.APK_PATH }}
+          
